@@ -1,9 +1,10 @@
 import React from 'react';
 import { cn } from '../../utils/cn';
 
-const GlassCard = ({ children, className, hoverEffect = false, ...props }) => {
+const GlassCard = ({ children, className, hoverEffect = false, innerRef, ...props }) => {
   return (
-    <div 
+    <div
+      ref={innerRef}
       className={cn(
         "glass-panel p-4",
         hoverEffect && "glass-panel-hover cursor-pointer",

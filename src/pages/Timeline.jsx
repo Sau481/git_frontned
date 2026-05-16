@@ -1,109 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import EvolutionGraph from '../components/explorer/EvolutionGraph';
 import GlassCard from '../components/shared/GlassCard';
-import { GitBranch, GitCommit, GitPullRequest, FileCode } from 'lucide-react';
+import { GitBranch, GitCommit, GitPullRequest, FileCode, AlertTriangle } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { getTimelineEvents } from '../services/api';
-
-const mockEvents = [
-  {
-    id: 1,
-    date: "Apr 18, 2024",
-    title: "OAuth Migration",
-    description: "Introduced OAuth2 integration and removed legacy token system.",
-    type: "Important Event",
-    badge: "Important",
-    color: "bg-accent",
-    branch: "main",
-    commitsCount: 8,
-    prsCount: 2,
-    prs: ["#142", "#143"],
-    filesCount: 12,
-    files: ["src/auth/oauth.ts", "src/middleware/auth.ts", "src/config/oauth.config.ts"],
-    summary: "This change modernized the authentication flow by introducing OAuth2. The legacy token-based system was deprecated."
-  },
-  {
-    id: 2,
-    date: "Apr 05, 2024",
-    title: "Merge pull request #156",
-    description: "Merged auth-rewrite into main",
-    type: "Merge",
-    badge: "Merge",
-    color: "bg-primary",
-    branch: "main",
-    commitsCount: 14,
-    prsCount: 1,
-    prs: ["#156"],
-    filesCount: 24,
-    files: ["src/auth/index.ts", "src/controllers/auth.ts"],
-    summary: "Merged the comprehensive auth-rewrite feature branch which fixes several security vulnerabilities."
-  },
-  {
-    id: 3,
-    date: "Mar 28, 2024",
-    title: "Fix: handle token refresh failure",
-    description: "Resolved edge case in token refresh logic",
-    type: "Commit",
-    badge: "Commit",
-    color: "bg-safe",
-    branch: "auth-rewrite",
-    commitsCount: 1,
-    prsCount: 0,
-    prs: [],
-    filesCount: 2,
-    files: ["src/services/token.ts", "tests/token.test.ts"],
-    summary: "Fixed a bug where token refresh would fail under high load, causing users to be logged out unexpectedly."
-  },
-  {
-    id: 4,
-    date: "Mar 15, 2024",
-    title: "Rollback Spike",
-    description: "7 rollback commits detected between Mar 10 - Mar 15",
-    type: "High Risk",
-    badge: "High Risk",
-    color: "bg-risk",
-    branch: "auth-rewrite",
-    commitsCount: 7,
-    prsCount: 0,
-    prs: [],
-    filesCount: 5,
-    files: ["src/config/redis.ts", "docker-compose.yml"],
-    summary: "Multiple rollbacks occurred due to unstable Redis connection logic introduced in the redis-integration branch."
-  },
-  {
-    id: 5,
-    date: "Mar 03, 2024",
-    title: "Redis Integration",
-    description: "Integrated Redis for session storage and caching",
-    type: "Important Event",
-    badge: "Important",
-    color: "bg-accent",
-    branch: "redis-integration",
-    commitsCount: 12,
-    prsCount: 1,
-    prs: ["#112"],
-    filesCount: 8,
-    files: ["src/services/session/redisStore.ts", "src/config/redis.ts"],
-    summary: "Initial integration of Redis to replace the in-memory session store, improving scalability across instances."
-  }
-];
 
 const Timeline = ({ searchQuery }) => {
   const [events, setEvents] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [activeTab, setActiveTab] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
+        setError(null);
         const eventsRes = await getTimelineEvents();
         setEvents(eventsRes);
         if (eventsRes.length > 0) setSelectedEventId(eventsRes[0].id);
       } catch (err) {
-        console.warn("Backend not connected, using mock data in Timeline");
-        setEvents(mockEvents);
-        if (mockEvents.length > 0) setSelectedEventId(mockEvents[0].id);
+        console.error("Failed to fetch timeline events:", err);
+        setError("Unable to load timeline events. Please check your simulated API connection.");
       } finally {
         setLoading(false);
       }
@@ -119,6 +38,24 @@ const Timeline = ({ searchQuery }) => {
   });
 
   const selectedEvent = events.find(e => e.id === selectedEventId);
+
+  if (error) {
+    return (
+      <div className="p-6 flex items-center justify-center h-[calc(100vh-100px)]">
+        <div className="bg-risk/10 border border-risk/30 rounded-lg p-6 max-w-md text-center">
+          <AlertTriangle className="w-8 h-8 text-risk mx-auto mb-3" />
+          <h3 className="text-risk font-semibold mb-2">Connection Error</h3>
+          <p className="text-gray-400 text-sm">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-panel border border-border rounded text-sm hover:text-white transition-colors"
+          >
+            Retry Connection
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto pb-32">

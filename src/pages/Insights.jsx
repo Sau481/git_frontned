@@ -12,28 +12,6 @@ import {
 import { cn } from '../utils/cn';
 import { getInsightsActivity, getInsightsDistribution, getImpactfulCommits } from '../services/api';
 
-const mockActivityData = [
-  { name: 'Jan 24', commits: 65, prs: 15 },
-  { name: 'Feb 24', commits: 85, prs: 25 },
-  { name: 'Mar 24', commits: 150, prs: 45 },
-  { name: 'Apr 24', commits: 110, prs: 35 },
-  { name: 'May 24', commits: 90, prs: 20 },
-];
-
-const mockDistributionData = [
-  { name: 'Additions', value: 42.1, color: '#10b981' },
-  { name: 'Modifications', value: 34.7, color: '#3b82f6' },
-  { name: 'Deletions', value: 15.9, color: '#8b5cf6' },
-  { name: 'Renames', value: 4.3, color: '#f59e0b' },
-  { name: 'Others', value: 3.0, color: '#6b7280' },
-];
-
-const mockCommitData = [
-  { hash: 'a1b2c3d', msg: 'feat(auth): integrate oauth with auth0', author: 'jane.doe', impact: 'High', impactColor: 'bg-risk/20 text-risk', files: 17, date: 'Mar 02, 2024' },
-  { hash: 'd4e5f6g', msg: 'feat(session): add redis session store', author: 'john.smith', impact: 'High', impactColor: 'bg-risk/20 text-risk', files: 9, date: 'Mar 03, 2024' },
-  { hash: 'f7e8d9c', msg: 'refactor: improve token handling', author: 'jane.doe', impact: 'Medium', impactColor: 'bg-accent/20 text-accent', files: 6, date: 'Feb 12, 2024' },
-];
-
 const MetricCard = ({ title, value, change, isPositive, icon: Icon, sparklineColor, iconColor }) => (
   <GlassCard className="p-4 flex flex-col justify-between h-full relative overflow-hidden group">
     <div className="flex justify-between items-start mb-2 z-10">
@@ -80,10 +58,13 @@ export default function Insights() {
   const [distributionData, setDistributionData] = useState([]);
   const [commitData, setCommitData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
+        setError(null);
         const [activityRes, distRes, commitsRes] = await Promise.all([
           getInsightsActivity(),
           getInsightsDistribution(),
@@ -93,16 +74,32 @@ export default function Insights() {
         setDistributionData(distRes);
         setCommitData(commitsRes);
       } catch (err) {
-        console.warn("Backend not connected, using mock data in Insights");
-        setActivityData(mockActivityData);
-        setDistributionData(mockDistributionData);
-        setCommitData(mockCommitData);
+        console.error("Failed to fetch insights data:", err);
+        setError("Unable to load insights data. Please check your simulated API connection.");
       } finally {
         setLoading(false);
       }
     };
     fetchData();
   }, []);
+
+  if (error) {
+    return (
+      <div className="p-6 flex items-center justify-center h-[calc(100vh-100px)]">
+        <div className="bg-risk/10 border border-risk/30 rounded-lg p-6 max-w-md text-center">
+          <AlertTriangle className="w-8 h-8 text-risk mx-auto mb-3" />
+          <h3 className="text-risk font-semibold mb-2">Connection Error</h3>
+          <p className="text-gray-400 text-sm">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-panel border border-border rounded text-sm hover:text-white transition-colors"
+          >
+            Retry Connection
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto pb-32 animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">

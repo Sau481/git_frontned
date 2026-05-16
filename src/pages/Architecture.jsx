@@ -1,23 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import GlassCard from '../components/shared/GlassCard';
 import SystemOverview from '../components/architecture/SystemOverview';
-import { GitPullRequest, GitMerge, LayoutGrid, Files, GitCommit, FileText, Database, Shield, Box } from 'lucide-react';
+import { GitPullRequest, GitMerge, LayoutGrid, Files, GitCommit, FileText, Database, Shield, Box, AlertTriangle } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { getArchitectureMetrics, getArchitectureStack } from '../services/api';
-
-const mockMetrics = {
-  services: 6,
-  modules: 24,
-  files: "1,248",
-  dependencies: 92
-};
-
-const mockStack = [
-  { name: 'TypeScript', short: 'TS', iconClass: 'bg-blue-500/20 text-blue-400', barClass: 'bg-blue-500', value: 68.7 },
-  { name: 'JavaScript', short: 'JS', iconClass: 'bg-yellow-500/20 text-yellow-400', barClass: 'bg-safe', value: 21.3 },
-  { name: 'JSON', short: '{ }', iconClass: 'bg-gray-500/20 text-gray-400', barClass: 'bg-accent', value: 5.2 },
-  { name: 'YAML', short: 'Y', iconClass: 'bg-risk/20 text-risk', barClass: 'bg-risk', value: 2.1 }
-];
 
 const ArchitectureInsights = () => {
   return (
@@ -198,10 +184,13 @@ export default function Architecture({ searchQuery }) {
   const [metrics, setMetrics] = useState(null);
   const [stack, setStack] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
+        setError(null);
         const [metricsRes, stackRes] = await Promise.all([
           getArchitectureMetrics(),
           getArchitectureStack()
@@ -209,15 +198,32 @@ export default function Architecture({ searchQuery }) {
         setMetrics(metricsRes);
         setStack(stackRes);
       } catch (err) {
-        console.warn("Backend not connected, using mock data in Architecture");
-        setMetrics(mockMetrics);
-        setStack(mockStack);
+        console.error("Failed to fetch architecture data:", err);
+        setError("Unable to load architecture data. Please check your simulated API connection.");
       } finally {
         setLoading(false);
       }
     };
     fetchData();
   }, []);
+
+  if (error) {
+    return (
+      <div className="p-6 flex items-center justify-center h-[calc(100vh-100px)]">
+        <div className="bg-risk/10 border border-risk/30 rounded-lg p-6 max-w-md text-center">
+          <AlertTriangle className="w-8 h-8 text-risk mx-auto mb-3" />
+          <h3 className="text-risk font-semibold mb-2">Connection Error</h3>
+          <p className="text-gray-400 text-sm">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-panel border border-border rounded text-sm hover:text-white transition-colors"
+          >
+            Retry Connection
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-7xl mx-auto pb-32 animate-in fade-in slide-in-from-bottom-4 duration-500">

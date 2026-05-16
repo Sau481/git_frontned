@@ -39,3 +39,127 @@
   background-color: theme('colors.primary');
   border: none;
 }
+
+/* ─── PRINT / PDF STYLES ───────────────────────────────────────────────── */
+@media print {
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  @page {
+    size: A4;
+    margin: 15mm 20mm;
+  }
+
+  /* Hide everything except the print zone */
+  body > * {
+    display: none !important;
+  }
+
+  /* The print portal root that we'll render into */
+  #report-print-portal {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+  }
+
+  #report-print-portal * {
+    display: revert !important;
+  }
+
+  /* ── Light theme overrides ── */
+  #report-print-portal {
+    background: #ffffff !important;
+    color: #111827 !important;
+    font-family: Inter, sans-serif !important;
+  }
+
+  /* Make all text dark */
+  #report-print-portal p,
+  #report-print-portal span,
+  #report-print-portal div,
+  #report-print-portal h1,
+  #report-print-portal h2,
+  #report-print-portal h3,
+  #report-print-portal h4,
+  #report-print-portal li {
+    color: #111827 !important;
+  }
+
+  /* Lighten muted text */
+  #report-print-portal .text-gray-400,
+  #report-print-portal .text-gray-500,
+  #report-print-portal .text-gray-600 {
+    color: #4b5563 !important;
+  }
+
+  /* White card backgrounds */
+  #report-print-portal .glass-panel,
+  #report-print-portal [class*="bg-panel"],
+  #report-print-portal [class*="bg-\\[#0"],
+  #report-print-portal [class*="bg-\\[#0a"],
+  #report-print-portal [class*="bg-\\[#0f"] {
+    background: #f9fafb !important;
+    border-color: #e5e7eb !important;
+    box-shadow: none !important;
+  }
+
+  /* Keep brand colors for badges/accents but ensure contrast */
+  #report-print-portal .text-primary { color: #7c3aed !important; }
+  #report-print-portal .text-safe    { color: #059669 !important; }
+  #report-print-portal .text-risk    { color: #dc2626 !important; }
+  #report-print-portal .text-accent  { color: #d97706 !important; }
+  #report-print-portal .text-blue-400 { color: #2563eb !important; }
+  #report-print-portal .text-white    { color: #111827 !important; }
+  #report-print-portal .text-gray-200,
+  #report-print-portal .text-gray-300 { color: #374151 !important; }
+
+  /* Badge backgrounds */
+  #report-print-portal .bg-primary\/10  { background: #ede9fe !important; }
+  #report-print-portal .bg-safe\/10     { background: #d1fae5 !important; }
+  #report-print-portal .bg-risk\/10,
+  #report-print-portal .bg-risk\/20     { background: #fee2e2 !important; }
+  #report-print-portal .bg-accent\/10,
+  #report-print-portal .bg-accent\/20   { background: #fef3c7 !important; }
+  #report-print-portal .bg-blue-400\/10 { background: #dbeafe !important; }
+  #report-print-portal .bg-panel\/30,
+  #report-print-portal .bg-panel\/40,
+  #report-print-portal .bg-panel\/50    { background: #f3f4f6 !important; }
+
+  /* Borders */
+  #report-print-portal .border-border,
+  #report-print-portal .border-border\/50,
+  #report-print-portal .border-border\/40 { border-color: #d1d5db !important; }
+
+  /* Gradient top accent bar */
+  #report-print-portal .bg-gradient-to-r {
+    background: linear-gradient(to right, #7c3aed, #3b82f6, #10b981) !important;
+  }
+
+  /* Keep metric number text dark */
+  #report-print-portal .text-\[20px\] { color: #111827 !important; }
+
+  /* Remove neon shadows */
+  #report-print-portal [class*="shadow"] { box-shadow: none !important; }
+
+  /* Section number circles */
+  #report-print-portal .bg-primary\/20 { background: #ede9fe !important; }
+  #report-print-portal .border-primary\/50 { border-color: #a78bfa !important; }
+
+  /* Allow natural multi-page flow */
+  #report-print-portal {
+    page-break-inside: auto !important;
+    overflow: visible !important;
+  }
+
+  #report-print-portal h2,
+  #report-print-portal h3 {
+    page-break-after: avoid;
+  }
+
+  #report-print-portal .grid > div {
+    page-break-inside: avoid;
+  }
+}

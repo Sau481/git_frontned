@@ -2,33 +2,30 @@ import React, { useState, useEffect } from 'react';
 import { 
   FileText, Download, Code, FileJson, Clock, Bot,
   GitCommit, Users, GitPullRequest, Rocket, ShieldAlert,
-  ArrowUpRight, ArrowDownRight, GitBranch, Check, Box, Database, Server, Activity, SearchCode, CheckCircle, Lightbulb, ChevronRight
+  ArrowUpRight, ArrowDownRight, GitBranch, Check, Box, Database, Server, Activity, SearchCode, CheckCircle, Lightbulb, ChevronRight, AlertTriangle, RefreshCw, Sparkles
 } from 'lucide-react';
 import GithubIcon from '../components/shared/GithubIcon';
 import GlassCard from '../components/shared/GlassCard';
 import { cn } from '../utils/cn';
 import { getReportsSummary } from '../services/api';
 
-const mockReportSummary = {
-  metrics: [
-    { title: "Total Commits", value: "1,246", change: "18.4%", isPositive: true, icon: GitCommit, colorClass: "text-primary" },
-    { title: "Active Developers", value: "14", change: "7.7%", isPositive: true, icon: Users, colorClass: "text-blue-400" },
-    { title: "PRs Merged", value: "198", change: "23.1%", isPositive: true, icon: GitPullRequest, colorClass: "text-safe" },
-    { title: "Deployments", value: "36", change: "20.0%", isPositive: true, icon: Rocket, colorClass: "text-accent" },
-    { title: "Failure Rate", value: "5.6%", change: "2.1%", isPositive: false, icon: ShieldAlert, colorClass: "text-risk" }
-  ],
-  branches: [
-    { name: 'main', type: 'Primary', status: 'Active', color: 'text-safe' },
-    { name: 'oauth-migration', type: 'Feature', status: 'High', color: 'text-risk' },
-    { name: 'redis-session-refactor', type: 'Feature', status: 'Merged', color: 'text-safe' },
-    { name: 'notification-service', type: 'Feature', status: 'Merged', color: 'text-safe' }
-  ],
-  commits: [
-    { hash: 'a1b2c3d', msg: 'feat(auth): integrate oauth', impact: 'High', color: 'bg-risk/20 text-risk' },
-    { hash: 'd4e5f6g', msg: 'feat(session): add redis', impact: 'High', color: 'bg-risk/20 text-risk' },
-    { hash: 'f7e8d9c', msg: 'refactor: improve token', impact: 'Medium', color: 'bg-accent/20 text-accent' },
-    { hash: 'e9d8c7b', msg: 'fix(core): memory leak', impact: 'High', color: 'bg-risk/20 text-risk' }
-  ]
+const iconMap = { GitCommit, Users, GitPullRequest, Rocket, ShieldAlert };
+
+const getNow = () => new Date().toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', hour12: true });
+
+const triggerDownload = (filename, content) => {
+  const blob = new Blob([content], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.style.display = 'none';
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 200);
 };
 
 // Subcomponents for the Report
@@ -41,21 +38,24 @@ const SectionHeader = ({ number, title }) => (
   </div>
 );
 
-const MetricBlock = ({ title, value, change, isPositive, icon: Icon, colorClass }) => (
-  <div className="flex-1 bg-panel/30 border border-border/50 rounded-lg p-3 flex flex-col justify-between">
-    <div className="flex justify-between items-start mb-2">
-      <div className={cn("p-1.5 rounded-md bg-white/5", colorClass)}>
-        <Icon className="w-3.5 h-3.5" />
+const MetricBlock = ({ title, value, change, isPositive, icon, colorClass }) => {
+  const Icon = typeof icon === 'string' ? iconMap[icon] : icon;
+  return (
+    <div className="flex-1 bg-panel/30 border border-border/50 rounded-lg p-3 flex flex-col justify-between">
+      <div className="flex justify-between items-start mb-2">
+        <div className={cn("p-1.5 rounded-md bg-white/5", colorClass)}>
+          {Icon && <Icon className="w-3.5 h-3.5" />}
+        </div>
+        <span className="text-[20px] font-bold text-white leading-none">{value}</span>
       </div>
-      <span className="text-[20px] font-bold text-white leading-none">{value}</span>
+      <h4 className="text-[10px] text-gray-500 font-semibold mb-1 uppercase tracking-wider">{title}</h4>
+      <div className={cn("text-[10px] flex items-center gap-1", isPositive ? "text-safe" : "text-risk")}>
+        {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+        {change} vs previous period
+      </div>
     </div>
-    <h4 className="text-[10px] text-gray-500 font-semibold mb-1 uppercase tracking-wider">{title}</h4>
-    <div className={cn("text-[10px] flex items-center gap-1", isPositive ? "text-safe" : "text-risk")}>
-      {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-      {change} vs previous period
-    </div>
-  </div>
-);
+  );
+};
 
 const TimelineItem = ({ date, badge, badgeColor, desc }) => (
   <div className="relative pl-6 pb-6 last:pb-0">
@@ -72,15 +72,21 @@ const TimelineItem = ({ date, badge, badgeColor, desc }) => (
 export default function Reports() {
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [generating, setGenerating] = useState(false);
+  const [generatedAt, setGeneratedAt] = useState('30 Apr 2024, 11:42 AM');
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
+        setError(null);
         const res = await getReportsSummary();
         setReportData(res);
       } catch (err) {
-        console.warn("Backend not connected, using mock data in Reports");
-        setReportData(mockReportSummary);
+        console.error('Failed to fetch reports data:', err);
+        setError('Unable to load reports data. Please check your simulated API connection.');
       } finally {
         setLoading(false);
       }
@@ -88,10 +94,323 @@ export default function Reports() {
     fetchData();
   }, []);
 
+  const handleGenerateReport = async () => {
+    setGenerating(true);
+    await new Promise(r => setTimeout(r, 2000));
+    setGeneratedAt(getNow());
+    setGenerating(false);
+  };
+
+  const handleExportMarkdown = () => {
+    if (!reportData) return;
+    const md = `# AI Repository Intelligence Report\n\nGenerated on: ${generatedAt}\nRepository: github.com/company/backend\nGenerated by: Code Archaeology AI\n\n---\n\n## Executive Summary\n\n${reportData.metrics.map(m => `- **${m.title}**: ${m.value} (${m.isPositive ? '+' : '-'}${m.change})`).join('\n')}\n\n---\n\n## Top Branches\n\n${reportData.branches.map(b => `- \`${b.name}\` — ${b.type} — ${b.status}`).join('\n')}\n\n---\n\n## Impactful Commits\n\n${reportData.commits.map(c => `- \`${c.hash}\` ${c.msg} — Impact: **${c.impact}**`).join('\n')}\n\n---\n\n## Recommendations\n\n- Increase test coverage for critical services\n- Reduce coupling between Auth and Session services\n- Monitor performance of Notification Service\n- Continue modularization of remaining components\n`;
+    triggerDownload('code-archaeology-report.md', md);
+  };
+
+  const handleExportJson = () => {
+    if (!reportData) return;
+    const json = JSON.stringify({
+      reportTitle: 'AI Repository Intelligence Report',
+      generatedAt,
+      repository: 'github.com/company/backend',
+      generatedBy: 'Code Archaeology AI',
+      metrics: reportData.metrics.map(({ icon, ...rest }) => rest),
+      branches: reportData.branches,
+      commits: reportData.commits,
+      recommendations: [
+        'Increase test coverage for critical services',
+        'Reduce coupling between Auth and Session services',
+        'Monitor performance of Notification Service',
+        'Continue modularization of remaining components',
+      ],
+    }, null, 2);
+    triggerDownload('code-archaeology-report.json', json);
+  };
+
+  const buildPrintHtml = () => {
+    if (!reportData) return '';
+    const badgeColors = {
+      'bg-primary/10': '#ede9fe', 'text-primary': '#6d28d9', 'border-primary/30': '#c4b5fd',
+      'bg-safe/10': '#d1fae5', 'text-safe': '#059669', 'border-safe/30': '#6ee7b7',
+      'bg-risk/10': '#fee2e2', 'bg-risk/20': '#fee2e2', 'text-risk': '#dc2626', 'border-risk/30': '#fca5a5',
+      'bg-accent/10': '#fef3c7', 'text-accent': '#d97706', 'border-accent/30': '#fcd34d',
+      'bg-blue-400/10': '#dbeafe', 'text-blue-400': '#2563eb', 'border-blue-400/30': '#93c5fd',
+    };
+
+    const metricIcons = { GitCommit: '↗', Users: '👥', GitPullRequest: '⇌', Rocket: '🚀', ShieldAlert: '⚠' };
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>AI Repository Intelligence Report</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: #fff; color: #111827; font-size: 12px; line-height: 1.6; }
+    .page { max-width: 780px; margin: 0 auto; padding: 40px; }
+    h1 { font-size: 26px; font-weight: 700; color: #111827; margin-bottom: 6px; }
+    h2 { font-size: 16px; font-weight: 700; color: #111827; }
+    h3 { font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px; }
+    h4 { font-size: 11px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+    p  { color: #374151; }
+    .accent-bar { height: 4px; background: linear-gradient(to right, #7c3aed, #3b82f6, #10b981); border-radius: 2px; margin-bottom: 32px; }
+    .meta { display: flex; gap: 24px; color: #6b7280; font-size: 11px; margin: 10px 0 14px; flex-wrap: wrap; }
+    .meta span { display: flex; align-items: center; gap: 5px; }
+    .desc { color: #374151; font-size: 11px; border-bottom: 1px solid #e5e7eb; padding-bottom: 24px; margin-bottom: 32px; }
+    .section { margin-bottom: 36px; }
+    .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .section-num { width: 22px; height: 22px; border-radius: 50%; background: #ede9fe; border: 1px solid #a78bfa; color: #7c3aed; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .metrics-row { display: flex; gap: 10px; margin-top: 12px; }
+    .metric-card { flex: 1; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
+    .metric-val { font-size: 20px; font-weight: 700; color: #111827; margin-bottom: 2px; }
+    .metric-title { font-size: 9px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+    .metric-change { font-size: 10px; margin-top: 4px; }
+    .timeline-item { padding-left: 20px; padding-bottom: 20px; border-left: 2px solid #e5e7eb; position: relative; margin-left: 8px; }
+    .timeline-dot { width: 10px; height: 10px; border-radius: 50%; background: #7c3aed; position: absolute; left: -6px; top: 2px; }
+    .timeline-row { display: flex; align-items: flex-start; gap: 12px; }
+    .timeline-date { font-size: 10px; color: #6b7280; font-family: monospace; white-space: nowrap; width: 120px; flex-shrink: 0; padding-top: 1px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; border: 1px solid; white-space: nowrap; }
+    .timeline-desc { font-size: 11px; color: #374151; padding-top: 1px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; }
+    .arch-row { display: flex; align-items: flex-start; gap: 0; flex-wrap: nowrap; }
+    .arch-box { background: #fff; border: 1px solid #d1d5db; border-radius: 6px; padding: 10px 14px; font-size: 10px; color: #374151; text-align: center; }
+    .arch-arrow { color: #9ca3af; font-size: 16px; padding: 0 6px; align-self: center; }
+    .arch-services { background: #f5f3ff; border: 1px solid #c4b5fd; border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 4px; }
+    .arch-service { background: #fff; border: 1px solid #e5e7eb; border-radius: 4px; padding: 4px 10px; font-size: 9px; text-align: center; }
+    .arch-stores { display: flex; flex-direction: column; gap: 4px; }
+    .arch-store { background: #fff; border: 1px solid #e5e7eb; border-radius: 4px; padding: 4px 10px; font-size: 9px; text-align: center; }
+    .insight-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .insight-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
+    .insight-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+    .table-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f3f4f6; font-size: 11px; }
+    .table-row:last-child { border-bottom: none; }
+    .mono { font-family: monospace; color: #6b7280; }
+    .agent-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; }
+    .agent-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .rec-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+    .check { color: #059669; font-size: 12px; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 10px; color: #9ca3af; text-align: center; }
+    @page { size: A4; margin: 15mm 20mm; }
+    @media print { body { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+  </style>
+</head>
+<body>
+<div class="page">
+  <div class="accent-bar"></div>
+  <h1>AI Repository Intelligence Report <span style="font-size:13px;color:#9ca3af;font-weight:400">v1.0</span></h1>
+  <div class="meta">
+    <span>🔗 github.com/company/backend</span>
+    <span>🕐 Generated on: ${generatedAt}</span>
+    <span>🤖 Generated by: Code Archaeology AI</span>
+  </div>
+  <p class="desc">Comprehensive analysis of your repository's evolution, architecture, key insights, and development activity between Jan 01, 2024 and Apr 30, 2024.</p>
+
+  <!-- Section 1: Executive Summary -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">1</div>
+      <h2>Executive Summary</h2>
+    </div>
+    <p style="font-size:11px;color:#374151;margin-bottom:14px">This repository has undergone significant evolution over the analyzed period, transitioning from a more monolithic structure to a modular, service-oriented architecture. Key improvements were made in authentication, session management, and system reliability.</p>
+    <div class="metrics-row">
+      ${reportData.metrics.map(m => `
+        <div class="metric-card">
+          <div class="metric-val">${m.value}</div>
+          <div class="metric-title">${m.title}</div>
+          <div class="metric-change" style="color:${m.isPositive ? '#059669' : '#dc2626'}">${m.isPositive ? '▲' : '▼'} ${m.change} vs previous</div>
+        </div>`).join('')}
+    </div>
+  </div>
+
+  <!-- Section 2: Timeline -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">2</div>
+      <h2>Repository Evolution Timeline</h2>
+    </div>
+    <div style="margin-top:10px">
+      ${[
+        { date: 'Jan 01–Jan 15, 2024', badge: 'Initial Phase', bgC: '#f3f4f6', textC: '#6b7280', borderC: '#d1d5db', desc: 'Baseline period with stable monolith architecture.' },
+        { date: 'Jan 16–Feb 10, 2024', badge: 'Redis Integration', bgC: '#dbeafe', textC: '#2563eb', borderC: '#93c5fd', desc: 'Redis introduced for session storage and caching.' },
+        { date: 'Feb 11–Mar 08, 2024', badge: 'OAuth Migration', bgC: '#ede9fe', textC: '#7c3aed', borderC: '#c4b5fd', desc: 'OAuth migration spike with significant code changes and rollback commits.' },
+        { date: 'Mar 09–Mar 28, 2024', badge: 'Stability Improvements', bgC: '#d1fae5', textC: '#059669', borderC: '#6ee7b7', desc: 'Performance optimizations and reduction in rollback rate.' },
+        { date: 'Mar 29–Apr 30, 2024', badge: 'Modularization', bgC: '#fef3c7', textC: '#d97706', borderC: '#fcd34d', desc: 'Services extracted (notifications, payments). Architecture becoming modular.' },
+      ].map(t => `
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-row">
+            <span class="timeline-date">${t.date}</span>
+            <span class="badge" style="background:${t.bgC};color:${t.textC};border-color:${t.borderC}">${t.badge}</span>
+            <span class="timeline-desc">&nbsp;&nbsp;${t.desc}</span>
+          </div>
+        </div>`).join('')}
+    </div>
+  </div>
+
+  <!-- Section 3 & 4 -->
+  <div class="grid-2" style="margin-bottom:36px">
+    <!-- Architecture -->
+    <div>
+      <div class="section-header">
+        <div class="section-num">3</div>
+        <h2>Architecture Overview</h2>
+      </div>
+      <div class="card" style="margin-top:10px">
+        <div style="display:flex;align-items:flex-start;gap:6px;flex-wrap:wrap">
+          <div class="arch-box">🖥 Web<br>(Frontend)</div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-box">⚙ API<br>Gateway</div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-services">
+            <div style="font-size:9px;color:#7c3aed;font-weight:700;text-align:center;margin-bottom:4px;text-transform:uppercase">Core Services</div>
+            ${['Auth Service','User Service','Payment Service','Notification Service'].map(s=>`<div class="arch-service">${s}</div>`).join('')}
+          </div>
+          <div class="arch-arrow">→</div>
+          <div class="arch-stores">
+            <div style="font-size:9px;color:#059669;font-weight:700;text-align:center;margin-bottom:4px;text-transform:uppercase">Data</div>
+            ${['PostgreSQL','Redis','S3/Blob'].map(s=>`<div class="arch-store">🗄 ${s}</div>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Key Insights -->
+    <div>
+      <div class="section-header">
+        <div class="section-num">4</div>
+        <h2>Key Insights &amp; Risks</h2>
+      </div>
+      <div class="insight-grid" style="margin-top:10px">
+        ${[
+          { title:'OAuth Migration Impact', badge:'High Impact', bgC:'#ede9fe', textC:'#7c3aed', borderC:'#c4b5fd', desc:'Introduced 17 files across 6 services. Spike in rollback commits and error rate Mar 01–Mar 08.' },
+          { title:'Redis Integration Boost', badge:'Positive', bgC:'#dbeafe', textC:'#2563eb', borderC:'#93c5fd', desc:'Improved session performance. Response time improved by 23%.' },
+          { title:'Architecture Evolution', badge:'Structural', bgC:'#d1fae5', textC:'#059669', borderC:'#6ee7b7', desc:'System evolved from monolith to modular services with clear boundaries.' },
+          { title:'Testing Gap Detected', badge:'Medium Risk', bgC:'#fef3c7', textC:'#d97706', borderC:'#fcd34d', desc:'High-impact changes merged with low test coverage.' },
+        ].map(i=>`
+          <div class="insight-card">
+            <div class="insight-head">
+              <span style="font-size:11px;font-weight:600;color:#111827">${i.title}</span>
+              <span class="badge" style="background:${i.bgC};color:${i.textC};border-color:${i.borderC}">${i.badge}</span>
+            </div>
+            <p style="font-size:10px;color:#6b7280">${i.desc}</p>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 5: Branches & Commits -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">5</div>
+      <h2>Important Branches &amp; Commits</h2>
+    </div>
+    <div class="grid-2" style="margin-top:10px">
+      <div>
+        <h4>Top Branches</h4>
+        ${reportData.branches.map(b=>`
+          <div class="table-row">
+            <span class="mono">${b.name}</span>
+            <span style="color:#9ca3af">${b.type}</span>
+            <span style="color:${b.color==='text-safe'?'#059669':b.color==='text-risk'?'#dc2626':'#6b7280'};font-weight:600">${b.status}</span>
+          </div>`).join('')}
+      </div>
+      <div>
+        <h4>Top Impactful Commits</h4>
+        ${reportData.commits.map(c=>`
+          <div class="table-row">
+            <span class="mono">${c.hash}</span>
+            <span style="color:#374151;flex:1;padding:0 8px;font-size:10px">${c.msg}</span>
+            <span class="badge" style="background:${c.impact==='High'?'#fee2e2':c.impact==='Medium'?'#fef3c7':'#f3f4f6'};color:${c.impact==='High'?'#dc2626':c.impact==='Medium'?'#d97706':'#6b7280'};border-color:${c.impact==='High'?'#fca5a5':c.impact==='Medium'?'#fcd34d':'#e5e7eb'}">${c.impact}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 6: Agent Findings -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">6</div>
+      <h2>Agent Investigation Findings</h2>
+    </div>
+    ${[
+      { icon:'🔍', bg:'#ede9fe', name:'Code Archaeologist', desc:'Analyzed commit history and identified key evolution phases including migration spikes and refactors.' },
+      { icon:'🕵️', bg:'#dbeafe', name:'Anomaly Detective', desc:'Detected rollback and error rate anomalies during OAuth migration window.' },
+      { icon:'🛡', bg:'#d1fae5', name:'Security Sentinel', desc:'Scanned for vulnerabilities and risky dependencies. No critical vulnerabilities found.' },
+      { icon:'💡', bg:'#fef3c7', name:'Insight Synthesizer', desc:'Synthesized findings from all agents and generated this comprehensive report.' },
+    ].map(a=>`
+      <div class="agent-row">
+        <div class="agent-icon" style="background:${a.bg}">${a.icon}</div>
+        <div>
+          <div style="font-weight:600;font-size:11px;color:#111827;margin-bottom:2px">${a.name}</div>
+          <div style="font-size:11px;color:#6b7280">${a.desc}</div>
+        </div>
+      </div>`).join('')}
+  </div>
+
+  <!-- Section 7: Recommendations -->
+  <div class="section" style="border-top:1px solid #e5e7eb;padding-top:24px">
+    <div class="section-header">
+      <div class="section-num">7</div>
+      <h2>Conclusions &amp; Recommendations</h2>
+    </div>
+    <div class="grid-2" style="margin-top:10px">
+      <div>
+        <p style="font-size:11px;color:#374151;margin-bottom:10px">The repository is moving in a positive direction towards modularization and scalability. Continued focus on test coverage, refactoring high-churn modules, and monitoring deployment stability will ensure long-term maintainability.</p>
+        <p style="font-size:10px;color:#9ca3af;font-style:italic">This report is AI-generated based on data from Jan 01, 2024 to Apr 30, 2024.</p>
+      </div>
+      <div class="card">
+        <h4>Top Recommendations</h4>
+        ${[
+          'Increase test coverage for critical services',
+          'Reduce coupling between Auth and Session services',
+          'Monitor performance of Notification Service',
+          'Continue modularization of remaining components',
+        ].map(r=>`<div class="rec-row"><span class="check">✓</span><span style="font-size:11px;color:#374151">${r}</span></div>`).join('')}
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">AI Repository Intelligence Report · Code Archaeology · ${generatedAt}</div>
+</div>
+</body>
+</html>`;
+  };
+
+  const handleExportPdf = async () => {
+    setExportingPdf(true);
+    await new Promise(r => setTimeout(r, 200));
+    const html = buildPrintHtml();
+    const win = window.open('', '_blank', 'width=900,height=700');
+    win.document.write(html);
+    win.document.close();
+    win.onload = () => {
+      win.focus();
+      win.print();
+      win.close();
+    };
+    setExportingPdf(false);
+  };
+
+  if (error) {
+    return (
+      <div className="p-6 flex items-center justify-center h-[calc(100vh-100px)]">
+        <div className="bg-risk/10 border border-risk/30 rounded-lg p-6 max-w-md text-center">
+          <AlertTriangle className="w-8 h-8 text-risk mx-auto mb-3" />
+          <h3 className="text-risk font-semibold mb-2">Connection Error</h3>
+          <p className="text-gray-400 text-sm">{error}</p>
+          <button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 bg-panel border border-border rounded text-sm hover:text-white transition-colors">Retry Connection</button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading || !reportData) {
     return (
       <div className="p-6 flex items-center justify-center h-[calc(100vh-100px)]">
-        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -99,30 +418,45 @@ export default function Reports() {
   return (
     <div className="p-6 max-w-7xl mx-auto pb-32 animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
       
-      {/* Action Bar (simulated as top-right but placed in page header for now) */}
       <div className="flex justify-between items-end mb-6">
         <div>
           <h2 className="text-2xl font-bold text-white mb-1">Reports</h2>
           <p className="text-sm text-gray-400">View and export generated repository intelligence reports.</p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 px-3 py-1.5 bg-primary/20 border border-primary/50 text-primary rounded hover:bg-primary/30 transition-colors text-xs font-medium shadow-neon">
-            <FileText className="w-3.5 h-3.5" /> Generate New Report
+          <button
+            onClick={handleGenerateReport}
+            disabled={generating}
+            className="flex items-center gap-2 px-3 py-1.5 bg-primary/20 border border-primary/50 text-primary rounded hover:bg-primary/30 transition-colors text-xs font-medium shadow-neon disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {generating ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            {generating ? 'Generating...' : 'Generate New Report'}
           </button>
-          <button className="flex items-center gap-2 px-3 py-1.5 bg-panel border border-border text-gray-300 rounded hover:text-white transition-colors text-xs">
-            <Download className="w-3.5 h-3.5" /> Export PDF
+          <button
+            onClick={handleExportPdf}
+            disabled={exportingPdf}
+            className="flex items-center gap-2 px-3 py-1.5 bg-panel border border-border text-gray-300 rounded hover:text-white hover:border-gray-500 transition-colors text-xs disabled:opacity-60"
+          >
+            {exportingPdf ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            Export PDF
           </button>
-          <button className="flex items-center gap-2 px-3 py-1.5 bg-panel border border-border text-gray-300 rounded hover:text-white transition-colors text-xs">
+          <button
+            onClick={handleExportMarkdown}
+            className="flex items-center gap-2 px-3 py-1.5 bg-panel border border-border text-gray-300 rounded hover:text-white hover:border-gray-500 transition-colors text-xs"
+          >
             <Code className="w-3.5 h-3.5" /> Export Markdown
           </button>
-          <button className="flex items-center gap-2 px-3 py-1.5 bg-panel border border-border text-gray-300 rounded hover:text-white transition-colors text-xs">
+          <button
+            onClick={handleExportJson}
+            className="flex items-center gap-2 px-3 py-1.5 bg-panel border border-border text-gray-300 rounded hover:text-white hover:border-gray-500 transition-colors text-xs"
+          >
             <FileJson className="w-3.5 h-3.5" /> Export JSON
           </button>
         </div>
       </div>
 
       {/* Main Report Document Container */}
-      <GlassCard className="max-w-6xl mx-auto bg-[#0a0a0f] border-border/60 shadow-2xl relative overflow-hidden">
+      <GlassCard id="report-print-zone" className="max-w-6xl mx-auto bg-[#0a0a0f] border-border/60 shadow-2xl relative overflow-hidden">
         {/* Decorative Top Accent */}
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary via-blue-500 to-safe"></div>
         
@@ -142,7 +476,7 @@ export default function Reports() {
               </div>
               <div className="flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5" />
-                <span>Generated on: <span className="text-gray-300">30 Apr 2024, 11:42 AM</span></span>
+                <span>Generated on: <span className={cn('transition-colors', generating ? 'text-primary animate-pulse' : 'text-gray-300')}>{generating ? 'Regenerating...' : generatedAt}</span></span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Bot className="w-3.5 h-3.5" />

@@ -1,89 +1,81 @@
-import axios from 'axios';
+import { mockAgentsData, mockAgentActivity } from '../data/agentsData';
+import { mockDetails, mockCommits, mockFiles, mockGraphNodes, mockGraphEdges } from '../data/explorerData';
+import { mockEvents } from '../data/timelineData';
+import { mockMetrics, mockStack } from '../data/architectureData';
+import { mockActivityData, mockDistributionData, mockCommitData } from '../data/insightsData';
+import { mockReportSummary } from '../data/reportsData';
 
-// Base API configuration
-const API_BASE_URL = 'http://localhost:8000/api';
+// Simulated Network Delay
+const FAKE_DELAY_MS = 800;
 
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 5000,
-  headers: {
-    'Content-Type': 'application/json',
-  }
-});
+const simulateApiCall = (data) => {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve(data);
+    }, FAKE_DELAY_MS);
+  });
+};
 
 // Agents Module
 export const getAgents = async () => {
-  const response = await apiClient.get('/agents');
-  return response.data;
+  return simulateApiCall(mockAgentsData);
 };
 
 export const getAgentActivity = async () => {
-  const response = await apiClient.get('/agents/activity');
-  return response.data;
+  return simulateApiCall(mockAgentActivity);
 };
 
 // Explorer Module
 export const getRepositoryDetails = async () => {
-  const response = await apiClient.get('/repository/details');
-  return response.data;
+  return simulateApiCall(mockDetails);
 };
 
 export const getRepositoryCommits = async () => {
-  const response = await apiClient.get('/repository/commits');
-  return response.data;
+  return simulateApiCall(mockCommits);
 };
 
 export const getRepositoryFiles = async () => {
-  const response = await apiClient.get('/repository/files');
-  return response.data;
+  return simulateApiCall(mockFiles);
 };
 
 export const getRepositoryGraph = async () => {
-  const response = await apiClient.get('/repository/graph');
-  return response.data;
+  return simulateApiCall({ nodes: mockGraphNodes, edges: mockGraphEdges });
 };
 
 // Timeline Module
 export const getTimelineEvents = async () => {
-  const response = await apiClient.get('/timeline/events');
-  return response.data;
+  return simulateApiCall(mockEvents);
 };
 
 // Architecture Module
 export const getArchitectureMetrics = async () => {
-  const response = await apiClient.get('/architecture/metrics');
-  return response.data;
+  return simulateApiCall(mockMetrics);
 };
 
 export const getArchitectureStack = async () => {
-  const response = await apiClient.get('/architecture/stack');
-  return response.data;
+  return simulateApiCall(mockStack);
 };
 
 // Insights Module
 export const getInsightsActivity = async () => {
-  const response = await apiClient.get('/insights/activity');
-  return response.data;
+  return simulateApiCall(mockActivityData);
 };
 
 export const getInsightsDistribution = async () => {
-  const response = await apiClient.get('/insights/distribution');
-  return response.data;
+  return simulateApiCall(mockDistributionData);
 };
 
 export const getInsightsHotspots = async () => {
-  const response = await apiClient.get('/insights/hotspots');
-  return response.data;
+  // Not currently mocked in UI, returning empty
+  return simulateApiCall([]);
 };
 
 export const getImpactfulCommits = async () => {
-  const response = await apiClient.get('/insights/impactful-commits');
-  return response.data;
+  return simulateApiCall(mockCommitData);
 };
 
 // Reports Module
 export const getReportsSummary = async () => {
-  const response = await apiClient.get('/reports/summary');
-  return response.data;
+  return simulateApiCall(mockReportSummary);
 };
 
